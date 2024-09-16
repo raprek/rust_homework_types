@@ -1,11 +1,10 @@
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Add, AddAssign};
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 struct Cat {
     age: usize,
-    // static lifetime to not suffer in traits
-    name: &'static str,
+    name: String,
 }
 
 #[derive(Debug)]
@@ -18,14 +17,8 @@ enum Pet {
 }
 
 impl Cat {
-    fn name_ptr(&self) -> &&str {
+    fn name_ptr(&self) -> &str {
         &self.name
-    }
-}
-
-impl Debug for Cat {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Cat {}, age: {}", self.name, self.age)
     }
 }
 
@@ -52,13 +45,13 @@ impl From<Cat> for Pet {
     }
 }
 
-impl From<Pet> for Cat {
-    fn from(value: Pet) -> Self {
+impl TryFrom<Pet> for Cat {
+    type Error = &'static str;
+
+    fn try_from(value: Pet) -> Result<Self, Self::Error> {
         match value {
-            Pet::Cat(cat) => cat,
-            Pet::Dog(_) => {
-                panic!("Pet of Dog kind cannot be converted into Cat")
-            }
+            Pet::Cat(cat) => Ok(cat),
+            Pet::Dog(_) => Err("Dog cannot be converted to cat"),
         }
     }
 }
@@ -77,7 +70,7 @@ mod tests {
     #[test]
     fn test_add_assign_cat() {
         let mut cat = Cat {
-            name: "Silvester",
+            name: String::from("Silvester"),
             age: 10,
         };
         cat += 20;
@@ -87,7 +80,7 @@ mod tests {
     #[test]
     fn test_add_to_cat() {
         let mut cat = Cat {
-            name: "Silvester",
+            name: String::from("Silvester"),
             age: 10,
         };
         cat = cat + 20;
@@ -95,32 +88,33 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_pet_dog_to_cat() {
         let pet = Pet::Dog(Dog);
-        let cat: Cat = pet.into();
+        let cat = Cat::try_from(pet);
+        assert_eq!(cat.is_err(), true)
     }
 
     #[test]
     fn test_pet_to_cat() {
         let pet = Pet::Cat(Cat {
-            name: "Silvester",
+            name: String::from("Silvester"),
             age: 10,
         });
-        let cat: Cat = pet.into();
-        assert_eq!(
-            Cat {
-                name: "Silvester",
-                age: 10
-            },
-            cat
-        )
+        if let Ok(cat) = Cat::try_from(pet) {
+            assert_eq!(
+                Cat {
+                    name: String::from("Silvester"),
+                    age: 10
+                },
+                cat
+            )
+        }
     }
 
     #[test]
     fn test_cat_to_pet() {
         let cat = Cat {
-            name: "Silvester",
+            name: String::from("Silvester"),
             age: 10,
         };
         let pet: Pet = cat.into();
@@ -129,7 +123,7 @@ mod tests {
                 assert_eq!(
                     cat,
                     Cat {
-                        name: "Silvester",
+                        name: String::from("Silvester"),
                         age: 10
                     }
                 )
@@ -142,7 +136,7 @@ mod tests {
 fn main() {
     let mut cat = Cat {
         age: 10,
-        name: "catty",
+        name: String::from("catty"),
     };
     println!("Display: {cat}");
 
@@ -158,10 +152,17 @@ fn main() {
     println!("Display cat age after Add  {cat}");
 
     // Cat to Pet
-    let pet: Pet = cat.into();
+    let mut pet: Pet = cat.into();
     println!("Pet: {pet:?}");
 
     // Pet to cat
-    let cat_from_pet: Cat = pet.into();
-    println!("Display cat age after Add  {cat_from_pet}");
+    if let Ok(cat_from_pet) = Cat::try_from(pet) {
+        println!("Display cat after extraction from Pet {cat_from_pet}");
+    }
+
+    // test try from
+    pet = Pet::Dog(Dog);
+    if let Err(err) = Cat::try_from(pet) {
+        println!("Err: {err}");
+    }
 }
